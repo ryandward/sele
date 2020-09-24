@@ -54,8 +54,6 @@ BEGIN {
     }
   }
 
-
-
   split(toupper(where),WHERE,",");
   split(set,SET,",");
 
@@ -153,7 +151,7 @@ NR==1 {
   }
 
   for (i in COLUMN) {
-    if(!(COLUMN[i] in CELL_MAP)){
+    if(!CELL_MAP[COLUMN[i]]){
       printf( "Unrecognized query column: %s\n", COLUMN[i] ) >"/dev/stderr";
       exit(1);
     }
