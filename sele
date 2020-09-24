@@ -1,0 +1,214 @@
+#!/usr/bin/awk -E
+#https://github.com/ryandward/sele
+BEGIN {
+
+  PROCINFO["sorted_in"] = "@ind_num_asc"
+
+  for( i = 1; i <= ARGC; i++ ) {
+    if( substr( ARGV[i], 1, 1 ) != "-" )
+    break;
+    if( ARGV[i] == "-c" ) {
+      column = ARGV[i+1];
+      i++;
+      continue;
+    }
+
+    if( ARGV[i] == "-q" ) {
+      quiet = 1;
+      continue;
+    }
+
+    if( ARGV[i] == "-s" ) {
+      set = ARGV[i+1];
+      i++;
+      continue;
+    }
+
+    if( ARGV[i] == "-w" ) {
+      where = ARGV[i+1];
+      i++;
+      continue;
+    }
+
+    printf( "Unrecognized option: %s\n", ARGV[i] ) >"/dev/stderr";
+    exit(1);
+  }
+
+  j = 1; c = 1;
+  for( i; i < ARGC; i++ ) {
+    ARGV[j++] = ARGV[i];
+    c++;
+  }
+
+  ARGC = c;
+
+  FS="\t";
+  OFS="\t";
+  # FPAT="[^,\"]*|\"([^\"]|\"\")*\""
+
+
+  if(column!=""){
+    clen = split(toupper(column),COLUMN,",");
+    for(i in COLUMN){
+      CELL_MAP[COLUMN[i]]
+    }
+  }
+
+
+
+  split(toupper(where),WHERE,",");
+  split(set,SET,",");
+
+  for(i in WHERE) {
+
+    if(index(WHERE[i],"==")){
+      split(WHERE[i],ARR,"==")
+      gsub(/[^a-zA-Z0-9]/, "\\\\&",ARR[2])
+      #gsub("[.]","[.]",ARR[2])
+      #Required to prevent dot from matching wildcard
+      WHERE_IX[ARR[1]]=ARR[2]
+      OPERATOR[ARR[1]]="=="
+    }
+
+    else if(index(WHERE[i],"!=")){
+      split(WHERE[i],ARR,"!=")
+      gsub(/[^a-zA-Z0-9]/, "\\\\&",ARR[2])
+      #gsub("[.]","[.]",ARR[2])
+      WHERE_IX[ARR[1]]=ARR[2]
+      #Required to prevent dot from matching wildcard
+      OPERATOR[ARR[1]]="!="
+    }
+
+    else if(index(WHERE[i],"!~")){
+      split(WHERE[i],ARR,"!~")
+      gsub(/[^a-zA-Z0-9]/, "\\\\&",ARR[2])
+      WHERE_IX[ARR[1]]=ARR[2]
+      OPERATOR[ARR[1]]="!~"
+    }
+
+    else if(index(WHERE[i],"~")){
+      split(WHERE[i],ARR,"~")
+      gsub(/[^a-zA-Z0-9]/, "\\\\&",ARR[2])
+      WHERE_IX[ARR[1]]=ARR[2]
+      OPERATOR[ARR[1]]="~"
+    }
+
+    else if(index(WHERE[i],">=")){
+      split(WHERE[i],ARR,">=")
+      gsub(/[^a-zA-Z0-9]/, "\\\\&",ARR[2])
+      WHERE_IX[ARR[1]]=ARR[2]
+      OPERATOR[ARR[1]]=">="
+    }
+
+    else if(index(WHERE[i],"<=")){
+      split(WHERE[i],ARR,"<=")
+      gsub(/[^a-zA-Z0-9]/, "\\\\&",ARR[2])
+      WHERE_IX[ARR[1]]=ARR[2]
+      OPERATOR[ARR[1]]="<="
+    }
+
+    else if(index(WHERE[i],">")){
+      split(WHERE[i],ARR,">")
+      gsub(/[^a-zA-Z0-9]/, "\\\\&",ARR[2])
+      WHERE_IX[ARR[1]]=ARR[2]
+      OPERATOR[ARR[1]]=">"
+    }
+
+    else if(index(WHERE[i],"<")){
+      split(WHERE[i],ARR,"<")
+      gsub(/[^a-zA-Z0-9]/, "\\\\&",ARR[2])
+      WHERE_IX[ARR[1]]=ARR[2]
+      OPERATOR[ARR[1]]="<"
+    }
+
+    else {
+      printf( "Invalid lookup condition character\n" ) >"/dev/stderr";
+      exit(1);
+    }
+  }
+
+    for(i in SET) {
+      if(index(SET[i],"==")){
+        printf( "Invalid update character\n" ) >"/dev/stderr";
+        exit(1);
+      }
+      else if(index(SET[i],"=")){
+        split(SET[i],ARR,"=")
+        SET_IX[toupper(ARR[1])]=ARR[2]
+      }
+      else {
+        printf( "Invalid update character, use =\n" ) >"/dev/stderr";
+        exit(1);
+      }
+    }
+}
+
+NR==1 {
+  for (i=1; i<=NF; i++) {
+    CELL_MAP[toupper($i)]=i
+    if(!column){
+      clen++;
+      COLUMN[i]=toupper($i);
+    }
+  }
+
+  for (i in COLUMN) {
+    if(!(COLUMN[i] in CELL_MAP)){
+      printf( "Unrecognized query column: %s\n", COLUMN[i] ) >"/dev/stderr";
+      exit(1);
+    }
+  }
+  for(i in WHERE_IX){
+    if(!(i in CELL_MAP)) {
+      printf( "Unrecognized where column: %s\n", i ) >"/dev/stderr";
+      exit(1);
+    }
+  }
+  for(i in SET_IX){
+    if(!(i in CELL_MAP)) {
+      printf( "Unrecognized update column: %s\n", i ) >"/dev/stderr";
+      exit(1);
+    }
+  }
+  if(quiet!=1){
+    for (i in COLUMN)
+      printf toupper($CELL_MAP[COLUMN[i]]) (+i<+clen ? OFS : ORS)
+  }
+}
+
+NR>1 {
+  if(where){
+    for(i in WHERE_IX) {
+      if (NR in STOP) next
+
+      else if (OPERATOR[i] == "==") {
+        regex = "^("WHERE_IX[i]")$"
+        if (toupper($CELL_MAP[i]) ~ regex) continue
+        else STOP[NR]
+      }
+
+      else if (OPERATOR[i] == "!="){
+        regex = "^("WHERE_IX[i]")$"
+        if (toupper($CELL_MAP[i]) !~ regex) continue
+        else STOP[NR]
+      }
+
+      else if (OPERATOR[i] == "!~" && toupper($CELL_MAP[i]) !~ WHERE_IX[i] ) continue
+      else if (OPERATOR[i] == ">=" && $CELL_MAP[i] >= +WHERE_IX[i] && $CELL_MAP[i] != ".") continue
+      else if (OPERATOR[i] == "<=" && $CELL_MAP[i] <= +WHERE_IX[i] && $CELL_MAP[i] != ".") continue
+      else if (OPERATOR[i] == "~" && toupper($CELL_MAP[i]) ~ WHERE_IX[i] ) continue
+      else if (OPERATOR[i] == ">" && $CELL_MAP[i] > +WHERE_IX[i] && $CELL_MAP[i] != ".") continue
+      else if (OPERATOR[i] == "<" && $CELL_MAP[i] < +WHERE_IX[i] && $CELL_MAP[i] != ".") continue
+      else STOP[NR]
+    }
+  }
+
+  if(set)
+    for(i in SET_IX)
+      $CELL_MAP[i] = SET_IX[i]
+
+  if(!(NR in STOP))
+    for (i in COLUMN)
+      printf $CELL_MAP[COLUMN[i]] (+i<+clen ? OFS : ORS)
+
+}
