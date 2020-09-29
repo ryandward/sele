@@ -118,8 +118,8 @@ BEGIN {
     split(Get_set[1], Get_expression, "==")
     split(Get_set[2], Set_expression, "=")
 
-    Get_map[toupper(Get_expression[1])] = toupper(Get_expression[2])
-    Set_map[toupper(Get_expression[1])][toupper(Set_expression[1])] = Set_expression[2]
+    Get_map[toupper(Get_expression[1])][i] = toupper(Get_expression[2])
+    Set_map[toupper(Get_expression[1])][toupper(Set_expression[1])][i] = Set_expression[2]
   }
 }
 
@@ -191,15 +191,19 @@ NR > 1 && where {
     }
     stop[NR]
   }
-
+}
   # need to create a whole new list of operators
   # or figure out how to get awk to evaluate a function
+NR>1 && set {
   for ( i in Get_map )
-    if ( Get_map[i] == toupper( $Node_index[i] ) )
-      for ( j in Set_map[i] )
-        if ( Set_map[i][j] )
-          $Node_index[i] = Set_map[i][j]
+    for (z in Get_map[i])
+      if ( Get_map[i][z] == toupper( $Node_index[i] ) )
+        for ( j in Set_map[i] )
+          if ( Set_map[i][j][z] )
+              $Node_index[j] = Set_map[i][j][z]
 }
+
+
 
 (!(NR in stop)) {
 
