@@ -18,7 +18,7 @@ BEGIN {
       continue;
     }
 
-    if( ARGV[i] == "-s" ) {
+    if( ARGV[i] == "-u" ) {
       set = ARGV[i+1];
       i++;
       continue;
@@ -60,51 +60,51 @@ BEGIN {
   for(i in Where) {
 
     if(index(Where[i],"==")){
-      split(Where[i],subj_pred,"==")
-      Where_map[subj_pred[1]]=subj_pred[2]
-      Operator[subj_pred[1]]="=="
+      split(Where[i],Expression,"==")
+      Where_map[Expression[1]]=Expression[2]
+      Operator[Expression[1]]="=="
     }
 
     else if(index(Where[i],"!=")){
-      split(Where[i],subj_pred,"!=")
-      Where_map[subj_pred[1]]=subj_pred[2]
-      Operator[subj_pred[1]]="!="
+      split(Where[i],Expression,"!=")
+      Where_map[Expression[1]]=Expression[2]
+      Operator[Expression[1]]="!="
     }
 
     else if(index(Where[i],"!~")){
-      split(Where[i],subj_pred,"!~")
-      Where_map[subj_pred[1]]=subj_pred[2]
-      Operator[subj_pred[1]]="!~"
+      split(Where[i],Expression,"!~")
+      Where_map[Expression[1]]=Expression[2]
+      Operator[Expression[1]]="!~"
     }
 
     else if(index(Where[i],"~")){
-      split(Where[i],subj_pred,"~")
-      Where_map[subj_pred[1]]=subj_pred[2]
-      Operator[subj_pred[1]]="~"
+      split(Where[i],Expression,"~")
+      Where_map[Expression[1]]=Expression[2]
+      Operator[Expression[1]]="~"
     }
 
     else if(index(Where[i],">=")){
-      split(Where[i],subj_pred,">=")
-      Where_map[subj_pred[1]]=subj_pred[2]
-      Operator[subj_pred[1]]=">="
+      split(Where[i],Expression,">=")
+      Where_map[Expression[1]]=Expression[2]
+      Operator[Expression[1]]=">="
     }
 
     else if(index(Where[i],"<=")){
-      split(Where[i],subj_pred,"<=")
-      Where_map[subj_pred[1]]=subj_pred[2]
-      Operator[subj_pred[1]]="<="
+      split(Where[i],Expression,"<=")
+      Where_map[Expression[1]]=Expression[2]
+      Operator[Expression[1]]="<="
     }
 
     else if(index(Where[i],">")){
-      split(Where[i],subj_pred,">")
-      Where_map[subj_pred[1]]=subj_pred[2]
-      Operator[subj_pred[1]]=">"
+      split(Where[i],Expression,">")
+      Where_map[Expression[1]]=Expression[2]
+      Operator[Expression[1]]=">"
     }
 
     else if(index(Where[i],"<")){
-      split(Where[i],subj_pred,"<")
-      Where_map[subj_pred[1]]=subj_pred[2]
-      Operator[subj_pred[1]]="<"
+      split(Where[i],Expression,"<")
+      Where_map[Expression[1]]=Expression[2]
+      Operator[Expression[1]]="<"
     }
 
     else {
@@ -113,20 +113,14 @@ BEGIN {
     }
   }
 
-    for(i in Set) {
-      if(index(Set[i],"==")){
-        printf("Invalid update character\n" ) >"/dev/stderr";
-        exit(1);
-      }
-      else if(index(Set[i],"=")){
-        split(Set[i],subj_pred,"=")
-        Set_map[toupper(subj_pred[1])]=subj_pred[2]
-      }
-      else {
-        printf("Invalid update character, use =\n" ) >"/dev/stderr";
-        exit(1);
-      }
-    }
+  for(i in Set) {
+    split(Set[i],Get_set,":")
+    split(Get_set[1], Get_expression, "==")
+    split(Get_set[2], Set_expression, "=")
+
+    Get_map[toupper(Get_expression[1])] = toupper(Get_expression[2])
+    Set_map[toupper(Get_expression[1])][toupper(Set_expression[1])] = Set_expression[2]
+  }
 }
 
 NR == 1 {
@@ -198,15 +192,18 @@ NR > 1 && where {
     stop[NR]
   }
 
-  if(set)
-    for(i in Set_map)
-      $Node_index[i] = Set_map[i]
-
-  }
+  # need to create a whole new list of operators
+  # or figure out how to get awk to evaluate a function
+  for ( i in Get_map )
+    if ( Get_map[i] == toupper( $Node_index[i] ) )
+      for ( j in Set_map[i] )
+        if ( Set_map[i][j] )
+          $Node_index[i] = Set_map[i][j]
+}
 
 (!(NR in stop)) {
 
-  if (quiet && FNR == 1) next
-  for (i in Column)
-    printf $Node_index[Column[i]] (i + 0 < clen + 0 ? OFS : ORS)
+  if ( quiet && FNR == 1 ) next
+  for ( i in Column )
+    printf $Node_index[Column[i]] ( i + 0 < clen + 0 ? OFS : ORS )
 }
