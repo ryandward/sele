@@ -111,9 +111,9 @@ Valid options for the ``where`` clause are:
 +--------+-----------------+
 | ~      | Regex           |
 +--------+-----------------+
-| !~     | No Regex        |
+| !~     | Not Like        |
 +--------+-----------------+
-|>,<,etc | Math operations |
+|>, <... | Math operations |
 +--------+-----------------+
 
 Note: Math operations **strongly** type the operand -- *e.g.* ``dose>13-14`` will be interpreted as ``dose>13``, and ``length>six`` will be interpreted as ``length>0`` .
