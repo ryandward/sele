@@ -60,51 +60,51 @@ BEGIN {
   for(i in Where) {
 
     if(index(Where[i],"==")){
-      split(Where[i],Expression,"==")
-      Where_map[Expression[1]]=Expression[2]
-      Operator[Expression[1]]="=="
+      split(Where[i],Find_expression,"==")
+      Where_map[Find_expression[1]]=Find_expression[2]
+      Operator[Find_expression[1]]="=="
     }
 
     else if(index(Where[i],"!=")){
-      split(Where[i],Expression,"!=")
-      Where_map[Expression[1]]=Expression[2]
-      Operator[Expression[1]]="!="
+      split(Where[i],Find_expression,"!=")
+      Where_map[Find_expression[1]]=Find_expression[2]
+      Operator[Find_expression[1]]="!="
     }
 
     else if(index(Where[i],"!~")){
-      split(Where[i],Expression,"!~")
-      Where_map[Expression[1]]=Expression[2]
-      Operator[Expression[1]]="!~"
+      split(Where[i],Find_expression,"!~")
+      Where_map[Find_expression[1]]=Find_expression[2]
+      Operator[Find_expression[1]]="!~"
     }
 
     else if(index(Where[i],"~")){
-      split(Where[i],Expression,"~")
-      Where_map[Expression[1]]=Expression[2]
-      Operator[Expression[1]]="~"
+      split(Where[i],Find_expression,"~")
+      Where_map[Find_expression[1]]=Find_expression[2]
+      Operator[Find_expression[1]]="~"
     }
 
     else if(index(Where[i],">=")){
-      split(Where[i],Expression,">=")
-      Where_map[Expression[1]]=Expression[2]
-      Operator[Expression[1]]=">="
+      split(Where[i],Find_expression,">=")
+      Where_map[Find_expression[1]]=Find_expression[2]
+      Operator[Find_expression[1]]=">="
     }
 
     else if(index(Where[i],"<=")){
-      split(Where[i],Expression,"<=")
-      Where_map[Expression[1]]=Expression[2]
-      Operator[Expression[1]]="<="
+      split(Where[i],Find_expression,"<=")
+      Where_map[Find_expression[1]]=Find_expression[2]
+      Operator[Find_expression[1]]="<="
     }
 
     else if(index(Where[i],">")){
-      split(Where[i],Expression,">")
-      Where_map[Expression[1]]=Expression[2]
-      Operator[Expression[1]]=">"
+      split(Where[i],Find_expression,">")
+      Where_map[Find_expression[1]]=Find_expression[2]
+      Operator[Find_expression[1]]=">"
     }
 
     else if(index(Where[i],"<")){
-      split(Where[i],Expression,"<")
-      Where_map[Expression[1]]=Expression[2]
-      Operator[Expression[1]]="<"
+      split(Where[i],Find_expression,"<")
+      Where_map[Find_expression[1]]=Find_expression[2]
+      Operator[Find_expression[1]]="<"
     }
 
     else {
@@ -150,6 +150,10 @@ NR == 1 {
 NR > 1 && where {
   for(i in Where_map) {
     if (NR in stop) next
+    # the design choice here was to dump every line from memory as the parser
+    # comes across it. this way, we can just tell it to stop when a condition
+    # fails, and enormous data sources can be munged easily.
+
     else {
       switch (Operator[i]){
         case "==":
@@ -192,22 +196,35 @@ NR > 1 && where {
     stop[NR]
   }
 }
-  # need to create a whole new list of operators
-  # or figure out how to get awk to evaluate a function
+# need to create a whole new list of operators
+# or figure out how to get awk to evaluate a function
+
 NR>1 && set {
   for ( i in Get_map )
+  # i axis maps to the column header names
     for (z in Get_map[i])
       if ( Get_map[i][z] == toupper( $Node_index[i] ) )
+      # a z axis is necessary to support setting the same
+      # field based on different requirements
+      # e.g. 'dir==fwd:dir=+,dir==rev:dir=-' will fail because
+      # every subsequent restriction will overwrite the last.
+
         for ( j in Set_map[i] )
+        # a j axis is required if you want to be able to change
+        # a field based on another field
+        # e.g. 'dose==10:group=treatment'
+
           if ( Set_map[i][j][z] )
               $Node_index[j] = Set_map[i][j][z]
 }
 
-
-
 (!(NR in stop)) {
 
   if ( quiet && FNR == 1 ) next
+  # skip the header if it's explicitly suppressed
+
+
   for ( i in Column )
     printf $Node_index[Column[i]] ( i + 0 < clen + 0 ? OFS : ORS )
+    # kind of funny how short this part is
 }
