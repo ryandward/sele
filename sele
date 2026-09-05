@@ -1,230 +1,149 @@
-#!/usr/bin/awk -E
-#https://github.com/ryandward/sele
+#!/usr/bin/gawk -E
+# https://github.com/ryandward/sele
+# Requires gawk (PROCINFO, switch, arrays of arrays, -E).
+
 BEGIN {
+  FS = "\t"; OFS = "\t"
 
-  PROCINFO["sorted_in"] = "@ind_num_asc"
+  # ---- option parsing --------------------------------------------------
+  for (i = 1; i < ARGC; i++) {
+    if (substr(ARGV[i], 1, 1) != "-") break
+    if (ARGV[i] == "--") { i++; break }
 
-  for( i = 1; i <= ARGC; i++ ) {
-    if( substr( ARGV[i], 1, 1 ) != "-" )
-    break;
-    if( ARGV[i] == "-c" ) {
-      column = ARGV[i+1];
-      i++;
-      continue;
+    if (ARGV[i] == "-q") { quiet = 1; continue }
+
+    if (ARGV[i] == "-c" || ARGV[i] == "-u" || ARGV[i] == "-w") {
+      if (i + 1 >= ARGC) {
+        printf("Option %s requires an argument\n", ARGV[i]) > "/dev/stderr"
+        exit 1
+      }
+      if      (ARGV[i] == "-c") column = ARGV[i+1]
+      else if (ARGV[i] == "-u") set    = ARGV[i+1]
+      else                      where  = ARGV[i+1]
+      i++
+      continue
     }
 
-    if( ARGV[i] == "-q" ) {
-      quiet = 1;
-      continue;
-    }
-
-    if( ARGV[i] == "-u" ) {
-      set = ARGV[i+1];
-      i++;
-      continue;
-    }
-
-    if( ARGV[i] == "-w" ) {
-      where = ARGV[i+1];
-      i++;
-      continue;
-    }
-
-    printf("Unrecognized option: %s\n", ARGV[i] ) >"/dev/stderr";
-    exit(1);
+    printf("Unrecognized option: %s\n", ARGV[i]) > "/dev/stderr"
+    exit 1
   }
 
-  j = 1; c = 1;
-  for( i; i < ARGC; i++ ) {
-    ARGV[j++] = ARGV[i];
-    c++;
+  # shift the remaining (file) arguments down
+  j = 1
+  for (; i < ARGC; i++) ARGV[j++] = ARGV[i]
+  ARGC = j
+
+  # ---- -c: output columns ---------------------------------------------
+  if (column != "") {
+    clen = split(toupper(column), Column, ",")
   }
 
-  ARGC = c;
-
-  FS="\t";
-  OFS="\t";
-  # FPAT="[^,\"]*|\"([^\"]|\"\")*\""
-
-
-  if(column!=""){
-    clen = split(toupper(column),Column,",");
-    for(i in Column){
-      Node_index[Column[i]]
-    }
-  }
-
-  split(toupper(where),Where,",");
-  split(set,Set,",");
-
-  for(i in Where) {
-
-    if(index(Where[i],"==")){
-      split(Where[i],Find_expression,"==")
-      Where_map[Find_expression[1]]=Find_expression[2]
-      Operator[Find_expression[1]]="=="
-    }
-
-    else if(index(Where[i],"!=")){
-      split(Where[i],Find_expression,"!=")
-      Where_map[Find_expression[1]]=Find_expression[2]
-      Operator[Find_expression[1]]="!="
-    }
-
-    else if(index(Where[i],"!~")){
-      split(Where[i],Find_expression,"!~")
-      Where_map[Find_expression[1]]=Find_expression[2]
-      Operator[Find_expression[1]]="!~"
-    }
-
-    else if(index(Where[i],"~")){
-      split(Where[i],Find_expression,"~")
-      Where_map[Find_expression[1]]=Find_expression[2]
-      Operator[Find_expression[1]]="~"
-    }
-
-    else if(index(Where[i],">=")){
-      split(Where[i],Find_expression,">=")
-      Where_map[Find_expression[1]]=Find_expression[2]
-      Operator[Find_expression[1]]=">="
-    }
-
-    else if(index(Where[i],"<=")){
-      split(Where[i],Find_expression,"<=")
-      Where_map[Find_expression[1]]=Find_expression[2]
-      Operator[Find_expression[1]]="<="
-    }
-
-    else if(index(Where[i],">")){
-      split(Where[i],Find_expression,">")
-      Where_map[Find_expression[1]]=Find_expression[2]
-      Operator[Find_expression[1]]=">"
-    }
-
-    else if(index(Where[i],"<")){
-      split(Where[i],Find_expression,"<")
-      Where_map[Find_expression[1]]=Find_expression[2]
-      Operator[Find_expression[1]]="<"
-    }
-
-    else {
-      printf("Invalid lookup condition character\n" ) >"/dev/stderr";
-      exit(1);
-    }
-  }
-
-  for(i in Set) {
-    split(Set[i],Get_set,":")
-    split(Get_set[1], Get_expression, "==")
-    split(Get_set[2], Set_expression, "=")
-
-    Get_map[toupper(Get_expression[1])][i] = toupper(Get_expression[2])
-    Set_map[toupper(Get_expression[1])][toupper(Set_expression[1])][i] = Set_expression[2]
-  }
-}
-
-NR == 1 {
-  for (i=1; i<=NF; i++) {
-    Node_index[toupper($i)] = i
-    Node_map[i] = $i
-    if(!column){
-      clen++;
-      Column[i]=toupper($i);
-    }
-  }
-
-  for (i in Column) {
-    if(!Node_index[Column[i]]){
-      printf("Unrecognized query column: %s\n", Column[i]) > "/dev/stderr" ; exit(1) }}
-
-  for(i in Where_map){
-    if(!(i in Node_index)) {
-      printf("Unrecognized where column: %s\n", i) > "/dev/stderr" ; exit(1) }}
-
-  for(i in Set_map){
-    if(!(i in Node_index)) {
-      printf("Unrecognized update column: %s\n", i) > "/dev/stderr" ; exit(1) }}
-
-}
-
-NR > 1 && where {
-  for(i in Where_map) {
-    if (NR in stop) next
-    # the design choice here was to dump every line from memory as the parser
-    # comes across it. this way, we can just tell it to stop when a condition
-    # fails, and enormous data sources can be munged easily.
-
-    else {
-      switch (Operator[i]){
-        case "==":
-          if (toupper($Node_index[i]) == Where_map[i]) continue
-          break
-
-        case "!=":
-          if (toupper($Node_index[i]) != Where_map[i]) continue
-          break
-
-        case "~":
-          if (toupper($Node_index[i]) ~ Where_map[i]) continue
-          break
-
-        case "!~":
-          if (toupper($Node_index[i]) !~ Where_map[i]) continue
-          break
-
-        case ">=":
-          # $Node_index[i] = $Node_index[i] + 0
-          if ($Node_index[i] + 0 >= Where_map[i] + 0) continue
-          break
-
-        case "<=":
-          # $Node_index[i] = $Node_index[i] + 0
-          if ($Node_index[i] + 0 <= Where_map[i] + 0) continue
-          break
-
-        case ">":
-          # $Node_index[i] = $Node_index[i] + 0
-          if ($Node_index[i] + 0 > Where_map[i] + 0) continue
-          break
-
-        case "<":
-          # $Node_index[i] = $Node_index[i] + 0
-          if ($Node_index[i] + 0 < Where_map[i] + 0) continue
-          break
+  # ---- -w: filter conditions ------------------------------------------
+  # Each condition is stored by its own index so that several conditions
+  # on the same column (e.g. 'x>1,x<5') don't overwrite each other.
+  nops = split("== != !~ ~ >= <= > <", Ops, " ")
+  nwhere = split(where, Where, ",")
+  for (k = 1; k <= nwhere; k++) {
+    best = 0; bestop = ""
+    for (o = 1; o <= nops; o++) {
+      p = index(Where[k], Ops[o])
+      if (p && (best == 0 || p < best ||
+                (p == best && length(Ops[o]) > length(bestop)))) {
+        best = p; bestop = Ops[o]
       }
     }
-    stop[NR]
+    if (best == 0 || best == 1) {
+      printf("Invalid lookup condition: %s\n", Where[k]) > "/dev/stderr"
+      exit 1
+    }
+    Where_col[k] = toupper(substr(Where[k], 1, best - 1))
+    Where_op[k]  = bestop
+    Where_val[k] = substr(Where[k], best + length(bestop))
+  }
+
+  # ---- -u: updates ('col==match:col2=value,...') ----------------------
+  nset = split(set, Set, ",")
+  for (k = 1; k <= nset; k++) {
+    if (split(Set[k], Get_set, ":") != 2 ||
+        (p = index(Get_set[1], "==")) == 0 ||
+        (q = index(Get_set[2], "=")) == 0) {
+      printf("Invalid update expression: %s\n", Set[k]) > "/dev/stderr"
+      exit 1
+    }
+    gcol = toupper(substr(Get_set[1], 1, p - 1))
+    gval = toupper(substr(Get_set[1], p + 2))
+    scol = toupper(substr(Get_set[2], 1, q - 1))
+    sval = substr(Get_set[2], q + 1)
+
+    Get_map[gcol][k] = gval
+    Set_map[gcol][scol][k] = sval
+    Set_cols[scol]
   }
 }
-# need to create a whole new list of operators
-# or figure out how to get awk to evaluate a function
 
-NR>1 && set {
-  for ( i in Get_map )
-  # i axis maps to the column header names
-    for (z in Get_map[i])
-      if ( Get_map[i][z] == toupper( $Node_index[i] ) )
-      # a z axis is necessary to support setting the same
-      # field based on different requirements
-      # e.g. 'dir==fwd:dir=+,dir==rev:dir=-' will fail because
-      # every subsequent restriction will overwrite the last.
+# ---- header: build name -> field index map ----------------------------
+FNR == 1 {
+  delete Node_index
+  for (i = 1; i <= NF; i++) Node_index[toupper($i)] = i
 
-        for ( j in Set_map[i] )
-        # a j axis is required if you want to be able to change
-        # a field based on another field
-        # e.g. 'dose==10:group=treatment'
+  if (column == "") {
+    delete Column
+    clen = NF
+    for (i = 1; i <= NF; i++) Column[i] = toupper($i)
+  }
 
-          if ( Set_map[i][j][z] )
-              $Node_index[j] = Set_map[i][j][z]
+  for (i = 1; i <= clen; i++)
+    if (!(Column[i] in Node_index)) {
+      printf("Unrecognized query column: %s\n", Column[i]) > "/dev/stderr"; exit 1 }
+
+  for (k in Where_col)
+    if (!(Where_col[k] in Node_index)) {
+      printf("Unrecognized where column: %s\n", Where_col[k]) > "/dev/stderr"; exit 1 }
+
+  for (c in Get_map)
+    if (!(c in Node_index)) {
+      printf("Unrecognized update column: %s\n", c) > "/dev/stderr"; exit 1 }
+
+  for (c in Set_cols)
+    if (!(c in Node_index)) {
+      printf("Unrecognized update target column: %s\n", c) > "/dev/stderr"; exit 1 }
+
+  # print the header once (from the first file) unless suppressed
+  if (quiet || NR > 1) next
 }
 
-(!(NR in stop)) {
+# ---- -w: drop rows that fail any condition ----------------------------
+# Rows are decided one at a time; nothing is kept in memory.
+FNR > 1 && where != "" {
+  for (k = 1; k <= nwhere; k++) {
+    f = $Node_index[Where_col[k]]
+    v = Where_val[k]
+    switch (Where_op[k]) {
+      case "==": ok = (toupper(f) == toupper(v)); break
+      case "!=": ok = (toupper(f) != toupper(v)); break
+      case "~":  ok = (toupper(f) ~  toupper(v)); break
+      case "!~": ok = (toupper(f) !~ toupper(v)); break
+      case ">=": ok = (f + 0 >= v + 0); break
+      case "<=": ok = (f + 0 <= v + 0); break
+      case ">":  ok = (f + 0 >  v + 0); break
+      case "<":  ok = (f + 0 <  v + 0); break
+    }
+    if (!ok) next
+  }
+}
 
-  if ( quiet && FNR == 1 ) next
-  # skip the header if it's explicitly suppressed
+# ---- -u: apply updates ------------------------------------------------
+FNR > 1 && set != "" {
+  for (c in Get_map)
+    for (z in Get_map[c])
+      if (Get_map[c][z] == toupper($Node_index[c]))
+        for (s in Set_map[c])
+          if (z in Set_map[c][s])
+            $Node_index[s] = Set_map[c][s][z]
+}
 
-
-  for ( i in Column )
-    printf $Node_index[Column[i]] ( i + 0 < clen + 0 ? OFS : ORS )
-    # kind of funny how short this part is
+# ---- output ------------------------------------------------------------
+{
+  for (i = 1; i <= clen; i++)
+    printf "%s%s", $Node_index[Column[i]], (i < clen ? OFS : ORS)
 }
